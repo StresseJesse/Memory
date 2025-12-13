@@ -8,7 +8,7 @@
 import Foundation
 import AppKit
 
-class Buffer {
+public class Buffer {
     let pointer: UnsafeRawPointer
     let dataCount: mach_msg_type_number_t
 

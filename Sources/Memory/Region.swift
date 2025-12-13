@@ -10,7 +10,7 @@ import AppKit
 
 
 // MARK: - Mach Region Representation
-struct Region {
+public struct Region {
     let address: mach_vm_address_t
     let size: mach_vm_size_t
     let info: vm_region_basic_info_64

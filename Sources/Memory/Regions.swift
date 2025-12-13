@@ -8,7 +8,7 @@ import Foundation
 import AppKit
 
 // MARK: - MachRegionIterator
-struct Regions: Sequence, IteratorProtocol {
+public struct Regions: Sequence, IteratorProtocol {
     private let taskPort: mach_port_t
     private var nextAddress: mach_vm_address_t = 1
     private let infoSize: mach_msg_type_number_t

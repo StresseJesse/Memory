@@ -34,7 +34,7 @@ let THREAD_STATE_COUNT        = mach_msg_type_number_t(MemoryLayout<x86_thread_s
 // MARK: - ProcessMemory Class
 // -------------------------------
 
-final class ProcessMemory {
+public final class ProcessMemory {
 
     let pid: pid_t
     let taskPort: mach_port_t
