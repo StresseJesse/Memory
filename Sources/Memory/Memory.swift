@@ -232,8 +232,8 @@ final class ProcessMemory {
     // ---------------------------
     // Executable path helper
     // ---------------------------
-    private static let PROC_PIDPATHINFO_MAXSIZE = 4096
     static func getExecutablePath(pid: pid_t) -> String? {
+        let PROC_PIDPATHINFO_MAXSIZE = 4096
         var buf = [CChar](repeating: 0, count: PROC_PIDPATHINFO_MAXSIZE)
         // Ensure the buffer size is cast correctly for the C function signature
         let ret = proc_pidpath(pid, &buf, UInt32(buf.count))
@@ -243,16 +243,11 @@ final class ProcessMemory {
         // Create a buffer slice up to the number of bytes returned (which includes the null terminator)
         let data = Data(bytes: buf, count: Int(ret))
 
-        // The warning suggests using decoding and truncating the null termination.
-        // A robust way to use String(decoding:as:) while respecting the null-terminator C-string convention:
-
         if let string = String(data: data, encoding: .utf8) {
              // Remove the expected single null terminator that proc_pidpath ensures
              return string.trimmingCharacters(in: CharacterSet(["\0"]))
         }
         
-        // Fallback for cases where Data approach fails (less common in this scenario)
-        // return String(cString: buf)
         return nil
     }
 }

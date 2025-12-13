@@ -27,7 +27,7 @@ class Buffer {
         )
 
         guard kr == KERN_SUCCESS, dataCount > 0,
-              let rawPtr = UnsafeRawPointer(bitPattern: UInt(data)) else {
+            let rawPtr = UnsafeRawPointer(bitPattern: UInt(data)) else {
             // If creation fails, deallocate immediately if data was partially obtained
             if data != 0 {
                  mach_vm_deallocate(mach_task_self_,
