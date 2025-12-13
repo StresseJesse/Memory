@@ -14,7 +14,7 @@ public struct Regions: Sequence, IteratorProtocol {
     private let infoSize: mach_msg_type_number_t
     private var filter: ((Region) -> Bool)?
 
-    init(taskPort: mach_port_t, filter: ((Region) -> Bool)? = nil) {
+    public init(taskPort: mach_port_t, filter: ((Region) -> Bool)? = nil) {
         self.taskPort = taskPort
         self.infoSize = mach_msg_type_number_t(
             UInt32(MemoryLayout<vm_region_basic_info_64>.size / MemoryLayout<integer_t>.size)
@@ -22,7 +22,7 @@ public struct Regions: Sequence, IteratorProtocol {
         self.filter = filter
     }
 
-    mutating func next() -> Region? {
+    public mutating func next() -> Region? {
         guard taskPort != MACH_PORT_NULL else { return nil }
 
         while true {
@@ -63,19 +63,19 @@ public struct Regions: Sequence, IteratorProtocol {
     }
 
     // MARK: - Lazy Filter Methods
-    func filterReadable() -> Regions {
+    public func filterReadable() -> Regions {
         Regions(taskPort: taskPort) { region in
             (region.info.protection & VM_PROT_READ) != 0
         }
     }
 
-    func filterExecutable() -> Regions {
+    public func filterExecutable() -> Regions {
         Regions(taskPort: taskPort) { region in
             (region.info.protection & VM_PROT_EXECUTE) != 0
         }
     }
     
-    func mainExecutable() -> Region? {
+    public func mainExecutable() -> Region? {
         for region in self.filterReadable() {
             if region.isMainExecutable {
                 let arch = region.cpuType!

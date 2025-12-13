@@ -17,7 +17,7 @@ public struct Region {
     let taskPort: mach_port_t
 
     // Read from memory
-    func read<T>(at address: mach_vm_address_t) -> T? {
+    public func read<T>(at address: mach_vm_address_t) -> T? {
         let size = MemoryLayout<T>.size
         var outSize: mach_vm_size_t = 0
 
@@ -40,12 +40,12 @@ public struct Region {
     }
 
     // Read Mach-O header using the read func
-    func readHeader() -> mach_header_64? {
+    public func readHeader() -> mach_header_64? {
         return read(at: address)
     }
 
     // Read first 4 bytes (magic) using the read func
-    func readMagic() -> UInt32? {
+    public func readMagic() -> UInt32? {
         return read(at: address)
     }
 
@@ -89,7 +89,7 @@ public struct Region {
     }
     
     // Find a code cave using the read func
-    func findCodeCave(length: mach_vm_size_t) -> mach_vm_address_t? {
+    public func findCodeCave(length: mach_vm_size_t) -> mach_vm_address_t? {
         guard length > 0, size >= length else { return nil }
         guard let buffer = Buffer(address: address, size: size, taskPort: taskPort) else { return nil }
 

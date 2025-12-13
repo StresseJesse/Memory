@@ -12,7 +12,7 @@ public class Buffer {
     let pointer: UnsafeRawPointer
     let dataCount: mach_msg_type_number_t
 
-    init?(address: mach_vm_address_t,
+    public init?(address: mach_vm_address_t,
           size: mach_vm_size_t,
           taskPort: mach_port_t) {
         var data: vm_offset_t = 0

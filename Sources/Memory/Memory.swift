@@ -46,7 +46,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Initializer by PID
     // ---------------------------
-    init?(pid: pid_t) {
+    public init?(pid: pid_t) {
         print("attempting to get task port for pid: \(pid)")
         guard let tport = ProcessMemory.getTaskPort(pid: pid) else { return nil }
         print("taskPort: \(tport)")
@@ -61,7 +61,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Convenience initializer by process name
     // ---------------------------
-    convenience init?(processName: String) {
+    public convenience init?(processName: String) {
         // honestly just because I'm too lazy to keep looking up pids
         guard let foundApp = NSWorkspace.shared.runningApplications
                 .first(where: { $0.localizedName?.lowercased() == processName.lowercased() }) else {
@@ -75,7 +75,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Read a value of type T
     // ---------------------------
-    func read<T>(at address: mach_vm_address_t) -> T? {
+    public func read<T>(at address: mach_vm_address_t) -> T? {
         let size = MemoryLayout<T>.size
         var outSize: mach_vm_size_t = 0
 
@@ -99,7 +99,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Read a specific number of bytes from address
     // ---------------------------
-    func read(at address: mach_vm_address_t, bytes: Int) -> [UInt8]? {
+    public func read(at address: mach_vm_address_t, bytes: Int) -> [UInt8]? {
         print("reading \(bytes) bytes from \(address)")
         var buffer = [UInt8](repeating: 0, count: bytes)
         var outSize: mach_vm_size_t = 0
@@ -119,7 +119,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Write a value of type T
     // ---------------------------
-    func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
+    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
         var val = value
         let kr = withUnsafePointer(to: &val) { ptr -> kern_return_t in
             let rawPtr = UnsafeRawPointer(ptr)
@@ -139,7 +139,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Follow a pointer chain
     // ---------------------------
-    func followPointerChain(base: mach_vm_address_t, offsets: [UInt64]) -> mach_vm_address_t? {
+    public func followPointerChain(base: mach_vm_address_t, offsets: [UInt64]) -> mach_vm_address_t? {
         var current = base
         for offset in offsets {
             guard let next: UInt64 = read(at: current) else { return nil }
@@ -148,7 +148,7 @@ public final class ProcessMemory {
         return current
     }
 
-    func followPointerChain(offsets: [UInt64]) -> mach_vm_address_t? {
+    public func followPointerChain(offsets: [UInt64]) -> mach_vm_address_t? {
         guard let first = offsets.first else { return nil }
         return followPointerChain(base: baseAddress + first,
                                   offsets: Array(offsets.dropFirst()))
@@ -157,7 +157,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Get all thread states
     // ---------------------------
-    func getAllThreadStates() -> [ThreadState] {
+    public func getAllThreadStates() -> [ThreadState] {
         var threadList: thread_act_array_t?
         var threadCount: mach_msg_type_number_t = 0
         let kr = task_threads(taskPort, &threadList, &threadCount)
