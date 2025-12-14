@@ -36,12 +36,12 @@ let THREAD_STATE_COUNT        = mach_msg_type_number_t(MemoryLayout<x86_thread_s
 
 public final class ProcessMemory {
 
-    let pid: pid_t
-    let taskPort: mach_port_t
-    let regions: Regions
-    let mainExecutable: Region
-    let baseAddress: mach_vm_address_t
-    let isTranslated: Bool = false   // assuming Rosetta is handled externally
+    public let pid: pid_t
+    public let taskPort: mach_port_t
+    public let regions: Regions
+    public let mainExecutable: Region
+    public let baseAddress: mach_vm_address_t
+    public let isTranslated: Bool = false   // assuming Rosetta is handled externally
 
     // ---------------------------
     // Initializer by PID
