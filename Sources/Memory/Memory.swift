@@ -157,7 +157,7 @@ public final class ProcessMemory {
     // ---------------------------
     // Get all thread states
     // ---------------------------
-    public func getAllThreadStates() -> [ThreadState] {
+    func getAllThreadStates() -> [ThreadState] {
         var threadList: thread_act_array_t?
         var threadCount: mach_msg_type_number_t = 0
         let kr = task_threads(taskPort, &threadList, &threadCount)
