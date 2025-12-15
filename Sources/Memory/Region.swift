@@ -38,6 +38,32 @@ public struct Region {
 
         return buffer.load(as: T.self)
     }
+    
+    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
+        var val = value // Make a local mutable copy
+
+        let size = MemoryLayout<T>.size
+        let kr = withUnsafePointer(to: &val) { ptr in
+            // Use UnsafeRawBufferPointer to get the byte range of the value
+            let buffer = UnsafeRawBufferPointer(start: ptr, count: size)
+            
+            // mach_vm_write expects the actual buffer pointer and data count
+            return mach_vm_write(
+                self.taskPort,                  // The remote task port
+                address,                        // The remote destination address
+                vm_offset_t(UInt(bitPattern: buffer.baseAddress)), // The local buffer address
+                mach_msg_type_number_t(size)    // The number of bytes to write
+            )
+        }
+
+        if kr != KERN_SUCCESS {
+            // It's helpful to print the error description for debugging
+            let err = String(cString: mach_error_string(kr), encoding: .ascii) ?? "Unknown Error"
+            print("Failed to write value at \(String(format: "%#llx", address)): KERN error \(kr) (\(err))")
+        }
+
+        return kr == KERN_SUCCESS
+    }
 
     // Read Mach-O header using the read func
     public func readHeader() -> mach_header_64? {

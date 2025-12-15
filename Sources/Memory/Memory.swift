@@ -119,22 +119,22 @@ public final class ProcessMemory {
     // ---------------------------
     // Write a value of type T
     // ---------------------------
-    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
-        var val = value
-        let kr = withUnsafePointer(to: &val) { ptr -> kern_return_t in
-            let rawPtr = UnsafeRawPointer(ptr)
-            return mach_vm_write(taskPort,
-                                 address,
-                                 vm_offset_t(UInt(bitPattern: rawPtr)),
-                                 mach_msg_type_number_t(MemoryLayout<T>.size))
-        }
-
-        if kr != KERN_SUCCESS {
-            print("Failed to write value at \(String(format: "%#llx", address))")
-        }
-
-        return kr == KERN_SUCCESS
-    }
+//    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
+//        var val = value
+//        let kr = withUnsafePointer(to: &val) { ptr -> kern_return_t in
+//            let rawPtr = UnsafeRawPointer(ptr)
+//            return mach_vm_write(taskPort,
+//                                 address,
+//                                 vm_offset_t(UInt(bitPattern: rawPtr)),
+//                                 mach_msg_type_number_t(MemoryLayout<T>.size))
+//        }
+//
+//        if kr != KERN_SUCCESS {
+//            print("Failed to write value at \(String(format: "%#llx", address))")
+//        }
+//
+//        return kr == KERN_SUCCESS
+//    }
 
     // ---------------------------
     // Follow a pointer chain
