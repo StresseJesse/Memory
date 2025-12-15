@@ -39,6 +39,24 @@ public struct Region {
         return buffer.load(as: T.self)
     }
     
+    /// Changes the memory protection for a range of addresses within the remote task.
+    /// - Returns: True if successful.
+    public func protect(address: mach_vm_address_t, size: mach_vm_size_t, newProtection: vm_prot_t) -> Bool {
+        let kr = mach_vm_protect(
+            taskPort,
+            address,
+            size,
+            // 'false' means we are NOT extending the maximum permissions
+            boolean_t(truncating: false),
+            newProtection
+        )
+        if kr != KERN_SUCCESS {
+            let err = String(cString: mach_error_string(kr), encoding: .ascii) ?? "Unknown Error"
+            print("Failed to change memory protection at \(String(format: "%#llx", address)): KERN error \(kr) (\(err))")
+        }
+        return kr == KERN_SUCCESS
+    }
+    
     public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
         var val = value // Make a local mutable copy
 
