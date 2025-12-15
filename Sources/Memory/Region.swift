@@ -89,7 +89,8 @@ public struct Region {
     }
     
     // Find a code cave using the read func
-    public func findCodeCave(length: mach_vm_size_t) -> mach_vm_address_t? {
+    public func findCodeCave<T: BinaryInteger>(length: T) -> mach_vm_address_t? {
+        let bitLength = mach_vm_size_t(length)
         guard length > 0, size >= length else { return nil }
         guard let buffer = Buffer(address: address, size: size, taskPort: taskPort) else { return nil }
 
