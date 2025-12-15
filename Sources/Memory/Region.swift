@@ -64,7 +64,7 @@ public struct Region {
         let kr = withUnsafePointer(to: &val) { ptr in
             // Use UnsafeRawBufferPointer to get the byte range of the value
             let buffer = UnsafeRawBufferPointer(start: ptr, count: size)
-            
+            print("buffer: \(buffer)\tcount: \(buffer.count)")
             // mach_vm_write expects the actual buffer pointer and data count
             return mach_vm_write(
                 self.taskPort,                  // The remote task port
