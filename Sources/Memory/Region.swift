@@ -57,31 +57,85 @@ public struct Region {
         return kr == KERN_SUCCESS
     }
     
-    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
-        var val = value // Make a local mutable copy
-
-        let size = MemoryLayout<T>.size
-        let kr = withUnsafePointer(to: &val) { ptr in
-            // Use UnsafeRawBufferPointer to get the byte range of the value
-            let buffer = UnsafeRawBufferPointer(start: ptr, count: size)
-            print("buffer: \(buffer)\tcount: \(buffer.count)")
-            // mach_vm_write expects the actual buffer pointer and data count
-            return mach_vm_write(
-                self.taskPort,                  // The remote task port
-                address,                        // The remote destination address
-                vm_offset_t(UInt(bitPattern: buffer.baseAddress)), // The local buffer address
-                mach_msg_type_number_t(size)    // The number of bytes to write
-            )
-        }
+//    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
+//        var val = value // Make a local mutable copy
+//
+//        let size = MemoryLayout<T>.size
+//        let kr = withUnsafePointer(to: &val) { ptr in
+//            // Use UnsafeRawBufferPointer to get the byte range of the value
+//            let buffer = UnsafeRawBufferPointer(start: ptr, count: size)
+//            print("buffer: \(buffer)\tcount: \(buffer.count)")
+//            // mach_vm_write expects the actual buffer pointer and data count
+//            return mach_vm_write(
+//                self.taskPort,                  // The remote task port
+//                address,                        // The remote destination address
+//                vm_offset_t(UInt(bitPattern: buffer.baseAddress)), // The local buffer address
+//                mach_msg_type_number_t(size)    // The number of bytes to write
+//            )
+//        }
+//
+//        if kr != KERN_SUCCESS {
+//            // It's helpful to print the error description for debugging
+//            let err = String(cString: mach_error_string(kr), encoding: .ascii) ?? "Unknown Error"
+//            print("Failed to write value at \(String(format: "%#llx", address)): KERN error \(kr) (\(err))")
+//        }
+//
+//        return kr == KERN_SUCCESS
+//    }
+    
+    /// Centralized function to handle the raw mach_vm_write call.
+    private func performMachWrite(
+        remoteAddress: mach_vm_address_t,
+        localBuffer: UnsafeRawPointer,
+        byteCount: Int
+    ) -> Bool {
+        let kr = mach_vm_write(
+            self.taskPort,
+            remoteAddress,
+            vm_offset_t(UInt(bitPattern: localBuffer)),
+            mach_msg_type_number_t(byteCount)
+        )
 
         if kr != KERN_SUCCESS {
-            // It's helpful to print the error description for debugging
             let err = String(cString: mach_error_string(kr), encoding: .ascii) ?? "Unknown Error"
-            print("Failed to write value at \(String(format: "%#llx", address)): KERN error \(kr) (\(err))")
+            print("Failed to write \(byteCount) bytes at \(String(format: "%#llx", remoteAddress)): KERN error \(kr) (\(err))")
         }
 
         return kr == KERN_SUCCESS
     }
+
+    // MARK: - Public Write Functions
+
+    /// Public function to write a single Swift value (e.g., Int, Float, Struct).
+    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
+        var val = value // Make a local mutable copy
+
+        // Use withUnsafePointer to access the raw memory of the single value T
+        return withUnsafePointer(to: &val) { ptr in
+            // Delegate the actual write operation to the common function
+            performMachWrite(
+                remoteAddress: address,
+                localBuffer: UnsafeRawPointer(ptr),
+                byteCount: MemoryLayout<T>.size
+            )
+        }
+    }
+    
+    /// Public function to write an array of bytes ([UInt8] or Data).
+    public func writeBytes(bytes: [UInt8], to address: mach_vm_address_t) -> Bool {
+        // Use withUnsafeBytes on the array to access its raw memory buffer
+        return bytes.withUnsafeBytes { bufferPointer in
+            guard let baseAddress = bufferPointer.baseAddress else { return false }
+            
+            // Delegate the actual write operation to the common function
+            return performMachWrite(
+                remoteAddress: address,
+                localBuffer: baseAddress,
+                byteCount: bytes.count
+            )
+        }
+    }
+
 
     // Read Mach-O header using the read func
     public func readHeader() -> mach_header_64? {
