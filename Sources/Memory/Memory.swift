@@ -76,65 +76,30 @@ public final class ProcessMemory {
     // Read a value of type T
     // ---------------------------
     public func read<T>(at address: mach_vm_address_t) -> T? {
-        let size = MemoryLayout<T>.size
-        var outSize: mach_vm_size_t = 0
-
-        let buffer = UnsafeMutableRawPointer.allocate(byteCount: size,
-                                                      alignment: MemoryLayout<T>.alignment)
-        defer { buffer.deallocate() }
-
-        let kr = mach_vm_read_overwrite(
-            taskPort,
-            address,
-            UInt64(size),
-            mach_vm_address_t(UInt(bitPattern: buffer)),
-            &outSize
-        )
-
-        guard kr == KERN_SUCCESS, outSize == size else { return nil }
-
-        return buffer.load(as: T.self)
+        let result: T? = self.mainExecutable.read(at: address)
+        return result
     }
     
     // ---------------------------
     // Read a specific number of bytes from address
     // ---------------------------
     public func read(at address: mach_vm_address_t, bytes: Int) -> [UInt8]? {
-        print("reading \(bytes) bytes from \(address)")
-        var buffer = [UInt8](repeating: 0, count: bytes)
-        var outSize: mach_vm_size_t = 0
-
-        let kr = buffer.withUnsafeMutableBytes { ptr -> kern_return_t in
-            mach_vm_read_overwrite(taskPort,
-                                   address,
-                                   UInt64(bytes),
-                                   mach_vm_address_t(UInt(bitPattern: ptr.baseAddress!)),
-                                   &outSize)
-        }
-
-        guard kr == KERN_SUCCESS, outSize == bytes else { return nil }
-        return buffer
+        return self.mainExecutable.read(at: address, bytes: bytes)
     }
 
     // ---------------------------
     // Write a value of type T
     // ---------------------------
-//    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
-//        var val = value
-//        let kr = withUnsafePointer(to: &val) { ptr -> kern_return_t in
-//            let rawPtr = UnsafeRawPointer(ptr)
-//            return mach_vm_write(taskPort,
-//                                 address,
-//                                 vm_offset_t(UInt(bitPattern: rawPtr)),
-//                                 mach_msg_type_number_t(MemoryLayout<T>.size))
-//        }
-//
-//        if kr != KERN_SUCCESS {
-//            print("Failed to write value at \(String(format: "%#llx", address))")
-//        }
-//
-//        return kr == KERN_SUCCESS
-//    }
+    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
+        return self.mainExecutable.write(value: value, to: address)
+    }
+    
+    // ---------------------------
+    // Write bytes to address
+    // ---------------------------
+    public func write(bytes: [UInt8], to address: mach_vm_address_t) -> Bool {
+        return self.mainExecutable.write(bytes: bytes, to: address)
+    }
 
     // ---------------------------
     // Follow a pointer chain

@@ -38,52 +38,24 @@ public struct Region {
 
         return buffer.load(as: T.self)
     }
-    
-    /// Changes the memory protection for a range of addresses within the remote task.
-    /// - Returns: True if successful.
-    public func protect(address: mach_vm_address_t, size: mach_vm_size_t, newProtection: vm_prot_t) -> Bool {
-        let kr = mach_vm_protect(
-            taskPort,
-            address,
-            size,
-            // 'false' means we are NOT extending the maximum permissions
-            boolean_t(truncating: false),
-            newProtection
-        )
-        if kr != KERN_SUCCESS {
-            let err = String(cString: mach_error_string(kr), encoding: .ascii) ?? "Unknown Error"
-            print("Failed to change memory protection at \(String(format: "%#llx", address)): KERN error \(kr) (\(err))")
+    // Read a specific number of bytes
+    public func read(at address: mach_vm_address_t, bytes: Int) -> [UInt8]? {
+        print("reading \(bytes) bytes from \(address)")
+        var buffer = [UInt8](repeating: 0, count: bytes)
+        var outSize: mach_vm_size_t = 0
+
+        let kr = buffer.withUnsafeMutableBytes { ptr -> kern_return_t in
+            mach_vm_read_overwrite(taskPort,
+                                   address,
+                                   UInt64(bytes),
+                                   mach_vm_address_t(UInt(bitPattern: ptr.baseAddress!)),
+                                   &outSize)
         }
-        return kr == KERN_SUCCESS
+
+        guard kr == KERN_SUCCESS, outSize == bytes else { return nil }
+        return buffer
     }
     
-//    public func write<T>(value: T, to address: mach_vm_address_t) -> Bool {
-//        var val = value // Make a local mutable copy
-//
-//        let size = MemoryLayout<T>.size
-//        let kr = withUnsafePointer(to: &val) { ptr in
-//            // Use UnsafeRawBufferPointer to get the byte range of the value
-//            let buffer = UnsafeRawBufferPointer(start: ptr, count: size)
-//            print("buffer: \(buffer)\tcount: \(buffer.count)")
-//            // mach_vm_write expects the actual buffer pointer and data count
-//            return mach_vm_write(
-//                self.taskPort,                  // The remote task port
-//                address,                        // The remote destination address
-//                vm_offset_t(UInt(bitPattern: buffer.baseAddress)), // The local buffer address
-//                mach_msg_type_number_t(size)    // The number of bytes to write
-//            )
-//        }
-//
-//        if kr != KERN_SUCCESS {
-//            // It's helpful to print the error description for debugging
-//            let err = String(cString: mach_error_string(kr), encoding: .ascii) ?? "Unknown Error"
-//            print("Failed to write value at \(String(format: "%#llx", address)): KERN error \(kr) (\(err))")
-//        }
-//
-//        return kr == KERN_SUCCESS
-//    }
-    
-    /// Centralized function to handle the raw mach_vm_write call.
     private func performMachWrite(
         remoteAddress: mach_vm_address_t,
         localBuffer: UnsafeRawPointer,
@@ -122,7 +94,7 @@ public struct Region {
     }
     
     /// Public function to write an array of bytes ([UInt8] or Data).
-    public func writeBytes(bytes: [UInt8], to address: mach_vm_address_t) -> Bool {
+    public func write(bytes: [UInt8], to address: mach_vm_address_t) -> Bool {
         // Use withUnsafeBytes on the array to access its raw memory buffer
         return bytes.withUnsafeBytes { bufferPointer in
             guard let baseAddress = bufferPointer.baseAddress else { return false }
@@ -135,6 +107,25 @@ public struct Region {
             )
         }
     }
+    /// Changes the memory protection for a range of addresses within the remote task.
+    /// - Returns: True if successful.
+    public func protect(address: mach_vm_address_t, size: mach_vm_size_t, newProtection: vm_prot_t) -> Bool {
+        let kr = mach_vm_protect(
+            taskPort,
+            address,
+            size,
+            // 'false' means we are NOT extending the maximum permissions
+            boolean_t(truncating: false),
+            newProtection
+        )
+        if kr != KERN_SUCCESS {
+            let err = String(cString: mach_error_string(kr), encoding: .ascii) ?? "Unknown Error"
+            print("Failed to change memory protection at \(String(format: "%#llx", address)): KERN error \(kr) (\(err))")
+        }
+        return kr == KERN_SUCCESS
+    }
+    
+    /// Centralized function to handle the raw mach_vm_write call.
 
 
     // Read Mach-O header using the read func
