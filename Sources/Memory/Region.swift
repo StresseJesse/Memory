@@ -79,9 +79,13 @@ public struct Region {
         // 4. Restore original permissions
         // Transitioning BACK to Execute (if it was executable) is the "kick"
         // Rosetta 2 needs to invalidate its ARM64 instruction cache.
-        let restoreSuccess = protect(address: remoteAddress, size: mach_vm_size_t(bytes.count), newProtection: originalProtection)
+        let restoreSuccess = protect(address: remoteAddress,
+                                     size: mach_vm_size_t(bytes.count),
+                                     newProtection: originalProtection)
         
-        return writeSuccess && restoreSuccess
+        let kicked = forceRosettaUpdate(at: remoteAddress)
+        
+        return writeSuccess && restoreSuccess && kicked
     }
 
     /// Generic version of safeWrite for single values
