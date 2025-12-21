@@ -159,12 +159,6 @@ public struct Region {
         }
         return kr == KERN_SUCCESS
     }
-    
-    /// Invalidates the instruction cache for a specific memory range.
-    /// This is necessary for Rosetta 2 to recognize in-memory code changes immediately.
-    public func refreshInsnCache(at address: UnsafeMutableRawPointer, length: Int) {
-        
-    }
 
     // Read Mach-O header using the read func
     public func readHeader() -> mach_header_64? {
