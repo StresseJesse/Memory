@@ -7,7 +7,6 @@
 
 import Foundation
 import AppKit
-import Darwin
 
 
 // MARK: - Mach Region Representation
@@ -61,6 +60,8 @@ public struct Region {
     /// It captures current permissions, elevates them to allow writing,
     /// performs the write, and restores permissions to trigger re-translation.
     public func safeWrite(bytes: [UInt8], to remoteAddress: mach_vm_address_t) -> Bool {
+        // suspend process
+        task_suspend(taskPort)
         // 1. Get current permissions (using the info stored in this Region)
         // Note: If writing to a sub-range, you might want to call mach_vm_region again,
         // but for most cases, self.info.protection is the source of truth for this block.
@@ -85,7 +86,8 @@ public struct Region {
                                      newProtection: originalProtection)
         
         let kicked = forceRosettaUpdate(at: remoteAddress)
-        
+        // resume process
+        task_resume(taskPort)
         return writeSuccess && restoreSuccess && kicked
     }
 
