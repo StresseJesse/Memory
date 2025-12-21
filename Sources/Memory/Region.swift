@@ -90,6 +90,7 @@ public struct Region {
         let kr = thread_create(taskPort, &thread)
         if kr == KERN_SUCCESS {
             thread_terminate(thread) // We don't need it to do anything, just exist
+            print("Thread created and terminated")
         } else {
             print("thread_create failed: \(kr)")
         }
