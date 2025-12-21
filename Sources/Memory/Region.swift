@@ -84,7 +84,7 @@ public struct Region {
                                      size: mach_vm_size_t(bytes.count),
                                      newProtection: originalProtection)
         
-        let kicked = forceRosettaUpdate(at: remoteAddress, length: bytes.count)
+        let kicked = forceRosettaUpdate(at: remoteAddress)
         
         return writeSuccess && restoreSuccess && kicked
     }
@@ -168,7 +168,7 @@ public struct Region {
     /// Forces Rosetta 2 to re-translate the memory by flipping protection on the entire 16KB page.
     /// - Parameter address: Any address within the page you modified.
     /// - Returns: True if the flip was successful.
-    public func forceRosettaUpdate(at address: mach_vm_address_t, length: Int) -> Bool {
+    public func forceRosettaUpdate(at address: mach_vm_address_t) -> Bool {
         let pageSize: mach_vm_size_t = 0x4000 // 16KB for Apple Silicon
         let pageBase = address & ~(pageSize - 1)
         
@@ -180,9 +180,6 @@ public struct Region {
         // 2. Flip back to Read-Execute (RX)
         // This transition acts as the "kick" that invalidates the translated cache.
         let rxProt = VM_PROT_READ | VM_PROT_EXECUTE | VM_PROT_COPY
-        if let pointer = UnsafeMutableRawPointer(bitPattern: Int(address)) {
-            sys_icache_invalidate(pointer, length)
-        }
         return protect(address: pageBase, size: pageSize, newProtection: rxProt)
     }
 
