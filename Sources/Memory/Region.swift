@@ -56,6 +56,41 @@ public struct Region {
         return buffer
     }
     
+    /// A specialized write function for Rosetta 2.
+    /// It captures current permissions, elevates them to allow writing,
+    /// performs the write, and restores permissions to trigger re-translation.
+    public func safeWrite(bytes: [UInt8], to remoteAddress: mach_vm_address_t) -> Bool {
+        // 1. Get current permissions (using the info stored in this Region)
+        // Note: If writing to a sub-range, you might want to call mach_vm_region again,
+        // but for most cases, self.info.protection is the source of truth for this block.
+        let originalProtection = self.info.protection
+        
+        // 2. Ensure we have Write + Copy permissions
+        // VM_PROT_COPY is vital when writing to executable pages to handle COW (Copy-on-Write)
+        let tempProtection = originalProtection | VM_PROT_WRITE | VM_PROT_COPY
+        
+        guard protect(address: remoteAddress, size: mach_vm_size_t(bytes.count), newProtection: tempProtection) else {
+            return false
+        }
+        
+        // 3. Perform the actual write
+        let writeSuccess = self.write(bytes: bytes, to: remoteAddress)
+        
+        // 4. Restore original permissions
+        // Transitioning BACK to Execute (if it was executable) is the "kick"
+        // Rosetta 2 needs to invalidate its ARM64 instruction cache.
+        let restoreSuccess = protect(address: remoteAddress, size: mach_vm_size_t(bytes.count), newProtection: originalProtection)
+        
+        return writeSuccess && restoreSuccess
+    }
+
+    /// Generic version of safeWrite for single values
+    public func safeWrite<T>(value: T, to remoteAddress: mach_vm_address_t) -> Bool {
+        var val = value
+        let bytes = withUnsafeBytes(of: &val) { Array($0) }
+        return safeWrite(bytes: bytes, to: remoteAddress)
+    }
+    
     private func performMachWrite(
         remoteAddress: mach_vm_address_t,
         localBuffer: UnsafeRawPointer,
@@ -125,8 +160,11 @@ public struct Region {
         return kr == KERN_SUCCESS
     }
     
-    /// Centralized function to handle the raw mach_vm_write call.
-
+    /// Invalidates the instruction cache for a specific memory range.
+    /// This is necessary for Rosetta 2 to recognize in-memory code changes immediately.
+    public func refreshInsnCache(at address: UnsafeMutableRawPointer, length: Int) {
+        
+    }
 
     // Read Mach-O header using the read func
     public func readHeader() -> mach_header_64? {
