@@ -84,19 +84,10 @@ public struct Region {
         let restoreSuccess = protect(address: remoteAddress,
                                      size: mach_vm_size_t(bytes.count),
                                      newProtection: originalProtection)
-        
-        let kicked = forceRosettaUpdate(at: remoteAddress)
-        var thread: thread_act_t = 0
-        let kr = thread_create(taskPort, &thread)
-        if kr == KERN_SUCCESS {
-            thread_terminate(thread) // We don't need it to do anything, just exist
-            print("Thread created and terminated")
-        } else {
-            print("thread_create failed: \(kr)")
-        }
+    
         // resume process
         task_resume(taskPort)
-        return writeSuccess && restoreSuccess && kicked
+        return writeSuccess && restoreSuccess
     }
 
     /// Generic version of safeWrite for single values
