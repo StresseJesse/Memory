@@ -69,7 +69,7 @@ public struct Region {
         
         // 2. Ensure we have Write + Copy permissions
         // VM_PROT_COPY is vital when writing to executable pages to handle COW (Copy-on-Write)
-        let tempProtection = originalProtection | VM_PROT_WRITE | VM_PROT_COPY
+        let tempProtection = VM_PROT_READ | VM_PROT_WRITE
         
         guard protect(address: remoteAddress, size: mach_vm_size_t(bytes.count), newProtection: tempProtection) else {
             return false
