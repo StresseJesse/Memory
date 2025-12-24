@@ -165,24 +165,6 @@ public struct Region {
         }
         return kr == KERN_SUCCESS
     }
-    
-    /// Forces Rosetta 2 to re-translate the memory by flipping protection on the entire 16KB page.
-    /// - Parameter address: Any address within the page you modified.
-    /// - Returns: True if the flip was successful.
-    public func forceRosettaUpdate(at address: mach_vm_address_t) -> Bool {
-        let pageSize: mach_vm_size_t = 0x4000 // 16KB for Apple Silicon
-        let pageBase = address & ~(pageSize - 1)
-        
-        // 1. Flip to Read-Write-Copy (RW)
-        // Note: VM_PROT_COPY is essential for executable pages on macOS.
-        let rwProt = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY
-        guard protect(address: pageBase, size: pageSize, newProtection: rwProt) else { return false }
-        
-        // 2. Flip back to Read-Execute (RX)
-        // This transition acts as the "kick" that invalidates the translated cache.
-        let rxProt = VM_PROT_READ | VM_PROT_EXECUTE | VM_PROT_COPY
-        return protect(address: pageBase, size: pageSize, newProtection: rxProt)
-    }
 
     // Read Mach-O header using the read func
     public func readHeader() -> mach_header_64? {

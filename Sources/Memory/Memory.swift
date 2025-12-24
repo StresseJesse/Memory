@@ -13,21 +13,35 @@ import AppKit
 // MARK: - Architecture-specific constants
 // -------------------------------
 
+
 #if arch(arm64)
-import Darwin.Mach
+let THREAD_STATE_FLAVOR = ARM_THREAD_STATE64
+let THREAD_STATE_COUNT = mach_msg_type_number_t(MemoryLayout<arm_thread_state64_t>.size / MemoryLayout<natural_t>.size)
 
-typealias ThreadState         = arm_thread_state64_t
-let THREAD_STATE_FLAVOR       = ARM_THREAD_STATE64
-let THREAD_STATE_COUNT        = mach_msg_type_number_t(
-                                    MemoryLayout<arm_thread_state64_t>.size / MemoryLayout<natural_t>.size)
-
+struct ThreadState {
+    var raw = arm_thread_state64_t()
+    
+    var pc: UInt64 { get { raw.__pc } set { raw.__pc = newValue } }
+    var arg0: UInt64 { get { raw.__x.0 } set { raw.__x.0 = newValue } }
+    var arg1: UInt64 { get { raw.__x.1 } set { raw.__x.1 = newValue } }
+    var arg2: UInt64 { get { raw.__x.2 } set { raw.__x.2 = newValue } }
+    var retVal: UInt64 { get { raw.__x.0 } }
+}
 #elseif arch(x86_64)
-import Darwin.Mach
-
-typealias ThreadState         = x86_thread_state64_t
-let THREAD_STATE_FLAVOR       = x86_THREAD_STATE64
-let THREAD_STATE_COUNT        = mach_msg_type_number_t(MemoryLayout<x86_thread_state64_t>.size / MemoryLayout<natural_t>.size)
+let THREAD_STATE_FLAVOR = x86_THREAD_STATE64
+let THREAD_STATE_COUNT = mach_msg_type_number_t(MemoryLayout<x86_thread_state64_t>.size / MemoryLayout<natural_t>.size)
+struct ThreadState {
+    var raw = x86_thread_state64_t()
+    
+    // Abstracting registers to common names
+    var pc: UInt64 { get { raw.__rip } set { raw.__rip = newValue } }
+    var arg0: UInt64 { get { raw.__rdi } set { raw.__rdi = newValue } }
+    var arg1: UInt64 { get { raw.__rsi } set { raw.__rsi = newValue } }
+    var arg2: UInt64 { get { raw.__rdx } set { raw.__rdx = newValue } }
+    var retVal: UInt64 { get { raw.__rax } }
+}
 #endif
+
 
 
 // -------------------------------
@@ -37,7 +51,7 @@ let THREAD_STATE_COUNT        = mach_msg_type_number_t(MemoryLayout<x86_thread_s
 public final class ProcessMemory {
 
     public let pid: pid_t
-    public let taskPort: mach_port_t
+    public let task: mach_port_t
     public let regions: Regions
     public let mainExecutable: Region
     public let baseAddress: mach_vm_address_t
@@ -51,7 +65,7 @@ public final class ProcessMemory {
         guard let tport = ProcessMemory.getTaskPort(pid: pid) else { return nil }
         print("taskPort: \(tport)")
         self.pid = pid
-        self.taskPort = tport
+        self.task = tport
         self.regions = Regions(taskPort: tport)
         guard let mainExec = self.regions.mainExecutable() else { return nil }
         self.mainExecutable = mainExec
@@ -118,6 +132,72 @@ public final class ProcessMemory {
         return followPointerChain(base: baseAddress + first,
                                   offsets: Array(offsets.dropFirst()))
     }
+    
+    func executeAndReturn(at address: mach_vm_address_t, arguments: [UInt64]) -> UInt64? {
+        var threadList: thread_act_array_t?
+        var threadCount: mach_msg_type_number_t = 0
+        
+        // 1. Get the list of threads
+        let kr = task_threads(self.task, &threadList, &threadCount)
+        guard kr == KERN_SUCCESS, let threads = threadList, threadCount > 0 else { return nil }
+        
+        // 2. Pick a thread to hijack (e.g., the first one)
+        // FIX: 'threads' is a pointer; we access index 0 to get a single 'thread_t'
+        let targetThread = threads[0]
+        
+        // Deallocate the thread list after we've picked our target to avoid leaks
+        defer {
+            let size = threadCount * mach_msg_type_number_t(MemoryLayout<thread_t>.size)
+            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), vm_size_t(size))
+        }
+
+        thread_suspend(targetThread)
+        
+        var state = ThreadState()
+        var stateCount = THREAD_STATE_COUNT
+        
+        // 3. Get and Set State using the single 'targetThread' port
+        let getKr = withUnsafeMutablePointer(to: &state.raw) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
+            }
+        }
+        
+        guard getKr == KERN_SUCCESS else { thread_resume(targetThread); return nil }
+
+        state.pc = UInt64(address)
+        if arguments.count > 0 { state.arg0 = arguments[0] }
+        if arguments.count > 1 { state.arg1 = arguments[1] }
+        if arguments.count > 2 { state.arg2 = arguments[2] }
+        
+        let setKr = withUnsafeMutablePointer(to: &state.raw) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                thread_set_state(targetThread, THREAD_STATE_FLAVOR, $0, stateCount)
+            }
+        }
+        
+        if setKr == KERN_SUCCESS {
+            thread_resume(targetThread)
+            
+            // Polling loop logic...
+            while true {
+                usleep(500)
+                thread_suspend(targetThread)
+                _ = withUnsafeMutablePointer(to: &state.raw) {
+                    $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                        thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
+                    }
+                }
+                if state.pc != UInt64(address) { break }
+                thread_resume(targetThread)
+            }
+        }
+        
+        let result = state.retVal
+        thread_resume(targetThread)
+        return result
+    }
+
 
     // ---------------------------
     // Get all thread states
@@ -125,7 +205,7 @@ public final class ProcessMemory {
     func getAllThreadStates() -> [ThreadState] {
         var threadList: thread_act_array_t?
         var threadCount: mach_msg_type_number_t = 0
-        let kr = task_threads(taskPort, &threadList, &threadCount)
+        let kr = task_threads(task, &threadList, &threadCount)
         guard kr == KERN_SUCCESS, let list = threadList else {
             print("Failed to get threads: \(kr)")
             return []
@@ -160,25 +240,6 @@ public final class ProcessMemory {
         }
 
         return (kr == KERN_SUCCESS) ? state : nil
-    }
-
-    // ---------------------------
-    // Register access helpers
-    // ---------------------------
-    static func pc(of state: ThreadState) -> UInt64 {
-        #if arch(arm64)
-        return state.__pc
-        #elseif arch(x86_64)
-        return state.__rip
-        #endif
-    }
-
-    static func sp(of state: ThreadState) -> UInt64 {
-        #if arch(arm64)
-        return state.__sp
-        #elseif arch(x86_64)
-        return state.__rsp
-        #endif
     }
 
     // ---------------------------
