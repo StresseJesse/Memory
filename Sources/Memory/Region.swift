@@ -188,7 +188,7 @@ public struct Region {
     /// - Parameters:
     ///   - address: The remote address to free.
     ///   - size: The size of the allocated block.
-    func deallocate(at address: mach_vm_address_t, size: Int) {
+    public func deallocate(at address: mach_vm_address_t, size: Int) {
         _ = mach_vm_deallocate(self.task, address, mach_vm_size_t(size))
     }
     
