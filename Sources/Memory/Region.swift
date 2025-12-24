@@ -191,6 +191,71 @@ public struct Region {
     func deallocate(at address: mach_vm_address_t, size: Int) {
         _ = mach_vm_deallocate(self.task, address, mach_vm_size_t(size))
     }
+    
+    func executeAndReturn(at address: mach_vm_address_t, arguments: [UInt64]) -> UInt64? {
+        var threadList: thread_act_array_t?
+        var threadCount: mach_msg_type_number_t = 0
+        
+        // 1. Get the list of threads
+        let kr = task_threads(task, &threadList, &threadCount)
+        guard kr == KERN_SUCCESS, let threads = threadList, threadCount > 0 else { return nil }
+        
+        // 2. Pick a thread to hijack (e.g., the first one)
+        // FIX: 'threads' is a pointer; we access index 0 to get a single 'thread_t'
+        let targetThread = threads[0]
+        
+        // Deallocate the thread list after we've picked our target to avoid leaks
+        defer {
+            let size = threadCount * mach_msg_type_number_t(MemoryLayout<thread_t>.size)
+            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), vm_size_t(size))
+        }
+
+        thread_suspend(targetThread)
+        
+        var state = ThreadState()
+        var stateCount = THREAD_STATE_COUNT
+        
+        // 3. Get and Set State using the single 'targetThread' port
+        let getKr = withUnsafeMutablePointer(to: &state.raw) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
+            }
+        }
+        
+        guard getKr == KERN_SUCCESS else { thread_resume(targetThread); return nil }
+
+        state.pc = UInt64(address)
+        if arguments.count > 0 { state.arg0 = arguments[0] }
+        if arguments.count > 1 { state.arg1 = arguments[1] }
+        if arguments.count > 2 { state.arg2 = arguments[2] }
+        
+        let setKr = withUnsafeMutablePointer(to: &state.raw) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                thread_set_state(targetThread, THREAD_STATE_FLAVOR, $0, stateCount)
+            }
+        }
+        
+        if setKr == KERN_SUCCESS {
+            thread_resume(targetThread)
+            
+            // Polling loop logic...
+            while true {
+                usleep(500)
+                thread_suspend(targetThread)
+                _ = withUnsafeMutablePointer(to: &state.raw) {
+                    $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                        thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
+                    }
+                }
+                if state.pc != UInt64(address) { break }
+                thread_resume(targetThread)
+            }
+        }
+        
+        let result = state.retVal
+        thread_resume(targetThread)
+        return result
+    }
 
 
     // Read Mach-O header using the read func
