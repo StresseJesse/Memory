@@ -20,8 +20,8 @@ let THREAD_STATE_COUNT = mach_msg_type_number_t(MemoryLayout<arm_thread_state64_
 
 struct ThreadState {
     var raw = arm_thread_state64_t()
-    
     var pc: UInt64 { get { raw.__pc } set { raw.__pc = newValue } }
+    var lr: UInt64 { get { raw.__lr } set { raw.__lr = newValue } } // Link Register
     var arg0: UInt64 { get { raw.__x.0 } set { raw.__x.0 = newValue } }
     var arg1: UInt64 { get { raw.__x.1 } set { raw.__x.1 = newValue } }
     var arg2: UInt64 { get { raw.__x.2 } set { raw.__x.2 = newValue } }
@@ -32,9 +32,8 @@ let THREAD_STATE_FLAVOR = x86_THREAD_STATE64
 let THREAD_STATE_COUNT = mach_msg_type_number_t(MemoryLayout<x86_thread_state64_t>.size / MemoryLayout<natural_t>.size)
 struct ThreadState {
     var raw = x86_thread_state64_t()
-    
-    // Abstracting registers to common names
     var pc: UInt64 { get { raw.__rip } set { raw.__rip = newValue } }
+    var sp: UInt64 { get { raw.__rsp } set { raw.__rsp = newValue } } // Added Stack Pointer
     var arg0: UInt64 { get { raw.__rdi } set { raw.__rdi = newValue } }
     var arg1: UInt64 { get { raw.__rsi } set { raw.__rsi = newValue } }
     var arg2: UInt64 { get { raw.__rdx } set { raw.__rdx = newValue } }

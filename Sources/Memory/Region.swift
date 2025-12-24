@@ -195,70 +195,81 @@ public struct Region {
     public func executeAndReturn(at address: mach_vm_address_t, arguments: [UInt64]) -> UInt64? {
         var threadList: thread_act_array_t?
         var threadCount: mach_msg_type_number_t = 0
+        guard task_threads(self.task, &threadList, &threadCount) == KERN_SUCCESS,
+              let threads = threadList, threadCount > 0 else { return nil }
         
-        // 1. Get the list of threads
-        let kr = task_threads(task, &threadList, &threadCount)
-        guard kr == KERN_SUCCESS, let threads = threadList, threadCount > 0 else { return nil }
-        
-        // 2. Pick a thread to hijack (e.g., the first one)
-        // FIX: 'threads' is a pointer; we access index 0 to get a single 'thread_t'
         let targetThread = threads[0]
-        
-        // Deallocate the thread list after we've picked our target to avoid leaks
-        defer {
-            let size = threadCount * mach_msg_type_number_t(MemoryLayout<thread_t>.size)
-            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), vm_size_t(size))
-        }
-
         thread_suspend(targetThread)
         
         var state = ThreadState()
         var stateCount = THREAD_STATE_COUNT
         
-        // 3. Get and Set State using the single 'targetThread' port
-        let getKr = withUnsafeMutablePointer(to: &state.raw) {
+        // 1. Capture original state to restore later
+        _ = withUnsafeMutablePointer(to: &state.raw) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
                 thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
             }
         }
-        
-        guard getKr == KERN_SUCCESS else { thread_resume(targetThread); return nil }
+        let originalState = state
 
+        // 2. Prepare a "Trap" address (an infinite loop)
+        // We can use a small executable page or simply point back to the entry point
+        // For now, let's assume we have an allocated 'trap' page with 0xEB 0xFE (jmp $)
+        let trapAddr: UInt64 = address // Or a dedicated page
+        
+        // 3. Setup Call
+        #if arch(x86_64)
+        // Align stack to 16 bytes and push the return address (trap)
+        state.sp -= 128 // Shadow space/Red zone safety
+        state.sp &= ~0xF // 16-byte alignment
+        state.sp -= 8
+        self.write(at: mach_vm_address_t(state.sp), value: trapAddr) // Write return address to stack
+        #elseif arch(arm64)
+        state.lr = trapAddr
+        #endif
+        
         state.pc = UInt64(address)
         if arguments.count > 0 { state.arg0 = arguments[0] }
         if arguments.count > 1 { state.arg1 = arguments[1] }
         if arguments.count > 2 { state.arg2 = arguments[2] }
         
-        let setKr = withUnsafeMutablePointer(to: &state.raw) {
+        _ = withUnsafeMutablePointer(to: &state.raw) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
                 thread_set_state(targetThread, THREAD_STATE_FLAVOR, $0, stateCount)
             }
         }
         
-        if setKr == KERN_SUCCESS {
-            thread_resume(targetThread)
-            
-            var count = 0
-            // Polling loop logic...
-            while true {
-                count += 1
-                print("[DEBUG] Polling... (\(count))")
-                usleep(500)
-                thread_suspend(targetThread)
-                _ = withUnsafeMutablePointer(to: &state.raw) {
-                    $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
-                        thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
-                    }
+        thread_resume(targetThread)
+        
+        // 4. Poll until the PC hits the Return Address/Trap
+        var result: UInt64? = nil
+        for _ in 0..<100 { // 100ms timeout
+            usleep(1000)
+            thread_suspend(targetThread)
+            _ = withUnsafeMutablePointer(to: &state.raw) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                    thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
                 }
-                if state.pc != UInt64(address) { break }
-                thread_resume(targetThread)
             }
+            
+            if state.pc == trapAddr {
+                result = state.retVal
+                break
+            }
+            thread_resume(targetThread)
         }
         
-        let result = state.retVal
+        // 5. CRITICAL: Restore original thread state to prevent crash
+        _ = withUnsafeMutablePointer(to: &originalState.raw) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(stateCount)) {
+                thread_set_state(targetThread, THREAD_STATE_FLAVOR, $0, stateCount)
+            }
+        }
         thread_resume(targetThread)
+        
         return result
     }
+
 
 
     // Read Mach-O header using the read func
