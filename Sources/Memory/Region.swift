@@ -238,8 +238,11 @@ public struct Region {
         if setKr == KERN_SUCCESS {
             thread_resume(targetThread)
             
+            var count = 0
             // Polling loop logic...
             while true {
+                count += 1
+                print("[DEBUG] Polling... (\(count))")
                 usleep(500)
                 thread_suspend(targetThread)
                 _ = withUnsafeMutablePointer(to: &state.raw) {
