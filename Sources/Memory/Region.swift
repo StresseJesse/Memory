@@ -210,7 +210,7 @@ public struct Region {
                 thread_get_state(targetThread, THREAD_STATE_FLAVOR, $0, &stateCount)
             }
         }
-        let originalState = state
+        var originalState = state
 
         // 2. Prepare a "Trap" address (an infinite loop)
         // We can use a small executable page or simply point back to the entry point
