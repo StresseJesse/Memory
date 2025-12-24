@@ -192,7 +192,7 @@ public struct Region {
         _ = mach_vm_deallocate(self.task, address, mach_vm_size_t(size))
     }
     
-    func executeAndReturn(at address: mach_vm_address_t, arguments: [UInt64]) -> UInt64? {
+    public func executeAndReturn(at address: mach_vm_address_t, arguments: [UInt64]) -> UInt64? {
         var threadList: thread_act_array_t?
         var threadCount: mach_msg_type_number_t = 0
         
