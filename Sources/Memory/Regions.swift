@@ -50,7 +50,7 @@ public struct Regions: Sequence, IteratorProtocol {
             let region = Region(address: regionAddress,
                                     size: regionSize,
                                     info: info,
-                                    taskPort: taskPort)
+                                    task: taskPort)
 
             if let filter = filter {
                 if filter(region) {

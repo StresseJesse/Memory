@@ -14,7 +14,7 @@ public struct Region {
     let address: mach_vm_address_t
     let size: mach_vm_size_t
     let info: vm_region_basic_info_64
-    let taskPort: mach_port_t
+    let task: mach_port_t
 
     // Read from memory
     public func read<T>(at address: mach_vm_address_t) -> T? {
@@ -27,7 +27,7 @@ public struct Region {
         defer { buffer.deallocate() }
 
         let kr = mach_vm_read_overwrite(
-            taskPort,
+            task,
             address,
             UInt64(size),
             mach_vm_address_t(UInt(bitPattern: buffer)),
@@ -45,7 +45,7 @@ public struct Region {
         var outSize: mach_vm_size_t = 0
 
         let kr = buffer.withUnsafeMutableBytes { ptr -> kern_return_t in
-            mach_vm_read_overwrite(taskPort,
+            mach_vm_read_overwrite(task,
                                    address,
                                    UInt64(bytes),
                                    mach_vm_address_t(UInt(bitPattern: ptr.baseAddress!)),
@@ -61,7 +61,7 @@ public struct Region {
     /// performs the write, and restores permissions to trigger re-translation.
     public func safeWrite(bytes: [UInt8], to remoteAddress: mach_vm_address_t) -> Bool {
         // suspend process
-        task_suspend(taskPort)
+        task_suspend(task)
         // 1. Get current permissions (using the info stored in this Region)
         // Note: If writing to a sub-range, you might want to call mach_vm_region again,
         // but for most cases, self.info.protection is the source of truth for this block.
@@ -86,7 +86,7 @@ public struct Region {
                                      newProtection: originalProtection)
     
         // resume process
-        task_resume(taskPort)
+        task_resume(task)
         return writeSuccess && restoreSuccess
     }
 
@@ -103,7 +103,7 @@ public struct Region {
         byteCount: Int
     ) -> Bool {
         let kr = mach_vm_write(
-            self.taskPort,
+            task,
             remoteAddress,
             vm_offset_t(UInt(bitPattern: localBuffer)),
             mach_msg_type_number_t(byteCount)
@@ -152,7 +152,7 @@ public struct Region {
     /// - Returns: True if successful.
     public func protect(address: mach_vm_address_t, size: mach_vm_size_t, newProtection: vm_prot_t) -> Bool {
         let kr = mach_vm_protect(
-            taskPort,
+            task,
             address,
             size,
             // 'false' means we are NOT extending the maximum permissions
@@ -165,6 +165,33 @@ public struct Region {
         }
         return kr == KERN_SUCCESS
     }
+    
+    /// Allocates memory in the target process.
+    /// - Parameter size: The number of bytes to allocate.
+    /// - Returns: The remote memory address, or nil if the allocation failed.
+    public func allocate(size: Int) -> mach_vm_address_t? {
+        var remoteAddress: mach_vm_address_t = 0
+        let machSize = mach_vm_size_t(size)
+        
+        // VM_FLAGS_ANYWHERE tells the kernel to find any available address
+        let kr = mach_vm_allocate(task, &remoteAddress, machSize, VM_FLAGS_ANYWHERE)
+        
+        guard kr == KERN_SUCCESS else {
+            print("Failed to allocate remote memory: \(kr)")
+            return nil
+        }
+        
+        return remoteAddress
+    }
+    
+    /// Frees memory previously allocated in the target process.
+    /// - Parameters:
+    ///   - address: The remote address to free.
+    ///   - size: The size of the allocated block.
+    func deallocate(at address: mach_vm_address_t, size: Int) {
+        _ = mach_vm_deallocate(self.task, address, mach_vm_size_t(size))
+    }
+
 
     // Read Mach-O header using the read func
     public func readHeader() -> mach_header_64? {
@@ -219,7 +246,7 @@ public struct Region {
     public func findCodeCave<T: BinaryInteger>(length: T) -> mach_vm_address_t? {
         let bitLength = mach_vm_size_t(length)
         guard length > 0, size >= length else { return nil }
-        guard let buffer = Buffer(address: address, size: size, taskPort: taskPort) else { return nil }
+        guard let buffer = Buffer(address: address, size: size, taskPort: task) else { return nil }
 
         
         let bytes = buffer.pointer.bindMemory(to: UInt8.self, capacity: Int(buffer.dataCount))
