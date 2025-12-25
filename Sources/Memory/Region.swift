@@ -117,7 +117,7 @@ public class Region {
         return addr
     }
 
-    public func deallocate(address: mach_vm_address_t, size: mach_vm_size_t) {
+    public func deallocate(at address: mach_vm_address_t, size: mach_vm_size_t) {
         MachCalls.deallocate(task: task, address: address, size: size)
     }
 
