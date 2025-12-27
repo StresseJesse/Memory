@@ -116,6 +116,11 @@ public final class RemoteMemory {
         let kr = MachCalls.allocate(task: task, size: size, address: &remoteAddress)
         return kr == KERN_SUCCESS ? remoteAddress : nil
     }
+    
+    // just for convenience and the ability to use MemoryLayout<T>.size
+    public func allocate(size: Int) -> mach_vm_address_t? {
+        return allocate(size: mach_vm_size_t(size))
+    }
 
     public func deallocate(address: mach_vm_address_t, size: mach_vm_size_t) {
         MachCalls.deallocate(task: task, address: address, size: size)
