@@ -116,6 +116,10 @@ public class Region {
         guard MachCalls.allocate(task: task, size: size, address: &addr) == KERN_SUCCESS else { return nil }
         return addr
     }
+    
+    public func allocate(size: Int) -> mach_vm_address_t? {
+        return allocate(size: mach_vm_size_t(size))
+    }
 
     public func deallocate(at address: mach_vm_address_t, size: mach_vm_size_t) {
         MachCalls.deallocate(task: task, address: address, size: size)
