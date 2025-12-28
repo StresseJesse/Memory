@@ -85,7 +85,6 @@ public struct Regions: Sequence, IteratorProtocol {
         else { return nil }
 
         for region in self {
-            print("checking region at \(region.address)")
             guard region.isReadable,
                   region.isExecutable else { continue }
 
