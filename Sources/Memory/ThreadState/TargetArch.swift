@@ -14,7 +14,7 @@ public enum TargetArch {
 
 /// Detects architecture of the *target task* by inspecting its Mach-O header.
 public func detectTargetArch(task: mach_port_t) -> TargetArch? {
-    var regions = Regions(taskPort: task)
+    var regions = Regions(port: task)
 
     guard let main = regions.mainExecutable(),
           let header: mach_header_64 = main.read(at: main.address)
