@@ -41,8 +41,8 @@ public class Region {
         memory.read(at: address)
     }
 
-    public func read(numBytes: Int, at address: mach_vm_address_t) -> [UInt8]? {
-        memory.read(numBytes: numBytes, at: address)
+    public func read(at address: mach_vm_address_t, numBytes: Int) -> [UInt8]? {
+        memory.read(at: address, numBytes: numBytes)
     }
 
     // MARK: - Writing
@@ -135,7 +135,8 @@ public class Region {
 
     public func findCodeCave(length: Int) -> mach_vm_address_t? {
         guard length > 0, size >= length else { return nil }
-        guard let buffer = read(numBytes: Int(size), at: address) else { return nil }
+        guard let buffer = read(at: address,
+                                numBytes: Int(size)) else { return nil }
 
         var caveStart: mach_vm_address_t? = nil
         var caveLen: Int = 0

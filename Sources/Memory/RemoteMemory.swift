@@ -69,7 +69,7 @@ public final class RemoteMemory {
     }
 
     /// Reads a specific number of bytes from a remote address
-    public func read(numBytes: Int, at address: mach_vm_address_t) -> [UInt8]? {
+    public func read(at address: mach_vm_address_t, numBytes: Int) -> [UInt8]? {
         if let ptr = pointer, let base = baseAddress, let count = count {
             let offset = Int(address - base)
             guard offset + numBytes <= count else { return nil }
