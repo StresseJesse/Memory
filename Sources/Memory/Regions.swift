@@ -9,7 +9,7 @@ enum MemError: Error {
 /// Lazily iterates over VM regions in a task.
 public struct Regions: Sequence, IteratorProtocol {
 
-    private let port: mach_port_t
+    public let port: mach_port_t
     private var nextAddress: mach_vm_address_t = 1
     private var filter: ((Region) -> Bool)?
 
