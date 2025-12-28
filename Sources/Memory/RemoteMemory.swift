@@ -52,45 +52,45 @@ public final class RemoteMemory {
 
     /// Reads a single Swift value of type T from remote memory
     public func read<T>(at address: mach_vm_address_t) -> T? {
-        var value: T = unsafeBitCast(0, to: T.self)
-        let size = MemoryLayout<T>.size
+        var value = T.self   // (just to reference type; not used)
+
+        var out = UnsafeMutablePointer<T>.allocate(capacity: 1)
+        defer { out.deallocate() }
+
         var outSize: mach_vm_size_t = 0
+        let size = MemoryLayout<T>.size
 
-        let success = withUnsafeMutablePointer(to: &value) { ptr -> Bool in
-            let kr = MachCalls.readOverwrite(task: task,
-                                             remote: address,
-                                             size: mach_vm_size_t(size),
-                                             local: mach_vm_address_t(UInt(bitPattern: ptr)),
-                                             outSize: &outSize)
-            return kr == KERN_SUCCESS && outSize == size
-        }
+        let kr = MachCalls.readOverwrite(
+            task: task,
+            remote: address,
+            size: mach_vm_size_t(size),
+            local: mach_vm_address_t(UInt(bitPattern: out)),
+            outSize: &outSize
+        )
 
-        return success ? value : nil
+        guard kr == KERN_SUCCESS, outSize == size else { return nil }
+        return out.pointee
     }
+
 
     /// Reads a specific number of bytes from a remote address
     public func read(at address: mach_vm_address_t, numBytes: Int) -> [UInt8]? {
-        if let ptr = pointer, let base = baseAddress, let count = count {
-            let offset = Int(address - base)
-            guard offset + numBytes <= count else { return nil }
-            let buffer = ptr.advanced(by: offset).bindMemory(to: UInt8.self, capacity: numBytes)
-            return Array(UnsafeBufferPointer(start: buffer, count: numBytes))
-        }
-
         var buffer = [UInt8](repeating: 0, count: numBytes)
         var outSize: mach_vm_size_t = 0
 
-        let success = buffer.withUnsafeMutableBytes { ptr in
-            guard let baseAddress = ptr.baseAddress else { return false }
-            let kr = MachCalls.readOverwrite(task: task,
-                                             remote: address,
-                                             size: mach_vm_size_t(numBytes),
-                                             local: mach_vm_address_t(UInt(bitPattern: baseAddress)),
-                                             outSize: &outSize)
-            return kr == KERN_SUCCESS && outSize == numBytes
+        let kr = buffer.withUnsafeMutableBytes { ptr -> kern_return_t in
+            guard let base = ptr.baseAddress else { return KERN_INVALID_ADDRESS }
+            return MachCalls.readOverwrite(
+                task: task,
+                remote: address,
+                size: mach_vm_size_t(numBytes),
+                local: mach_vm_address_t(UInt(bitPattern: base)),
+                outSize: &outSize
+            )
         }
 
-        return success ? buffer : nil
+        guard kr == KERN_SUCCESS, outSize == numBytes else { return nil }
+        return buffer
     }
 
     // MARK: - Write / Protect / Allocate / Deallocate
