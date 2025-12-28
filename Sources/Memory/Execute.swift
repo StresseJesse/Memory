@@ -33,7 +33,7 @@ public enum RemoteExecute {
         switch arch {
 
         case .arm64:
-            guard var original: ThreadStateARM64 = getThreadState(ThreadStateARM64.self, thread: thread) else {
+            guard var original: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: thread) else {
                 print("[RemoteExecute] getThreadState ARM64 failed")
                 return nil
             }
@@ -55,17 +55,17 @@ public enum RemoteExecute {
             usleep(sleepUS)
             thread_suspend(thread)
 
-            guard let final: ThreadStateARM64 = getThreadState(ThreadStateARM64.self, thread: thread) else {
+            guard let final: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: thread) else {
                 print("[RemoteExecute] getThreadState ARM64 final failed")
                 _ = setThreadState(&original, thread: thread)
                 return nil
             }
 
             _ = setThreadState(&original, thread: thread)
-            return final.retInt
+            return final.retVal
 
         case .x86_64:
-            guard var original: ThreadStateX86_64 = getThreadState(ThreadStateX86_64.self, thread: thread) else {
+            guard var original: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: thread) else {
                 print("[RemoteExecute] getThreadState X86_64 failed")
                 return nil
             }
@@ -87,14 +87,14 @@ public enum RemoteExecute {
             usleep(sleepUS)
             thread_suspend(thread)
 
-            guard let final: ThreadStateX86_64 = getThreadState(ThreadStateX86_64.self, thread: thread) else {
+            guard let final: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: thread) else {
                 print("[RemoteExecute] getThreadState X86_64 final failed")
                 _ = setThreadState(&original, thread: thread)
                 return nil
             }
 
             _ = setThreadState(&original, thread: thread)
-            return final.retInt
+            return final.retVal
         }
     }
 }

@@ -1,0 +1,4 @@
+module CMach {
+  header "CMach.h"
+  export *
+}

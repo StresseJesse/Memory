@@ -7,17 +7,17 @@ let package = Package(
     name: "Memory",
     platforms: [.macOS(.v26)],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
-        .library(
-            name: "Memory",
-            targets: ["Memory"]
-        ),
+        .library(name: "Memory", targets: ["Memory"]),
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "Memory"
+            name: "CMach",
+            path: "Sources/CMach",
+            publicHeadersPath: "include"
+        ),
+        .target(
+            name: "Memory",
+            dependencies: ["CMach"]
         ),
         .testTarget(
             name: "MemoryTests",

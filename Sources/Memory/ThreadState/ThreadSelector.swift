@@ -47,12 +47,12 @@ public enum ThreadSelector {
 
             switch arch {
             case .arm64:
-                if let _: ThreadStateARM64 = getThreadState(ThreadStateARM64.self, thread: t) {
+                if let _: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: t) {
                     print("[ThreadSelector] selected thread index \(i) (arm64)")
                     return t
                 }
             case .x86_64:
-                if let _: ThreadStateX86_64 = getThreadState(ThreadStateX86_64.self, thread: t) {
+                if let _: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: t) {
                     print("[ThreadSelector] selected thread index \(i) (x86_64)")
                     return t
                 }

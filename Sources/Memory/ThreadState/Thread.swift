@@ -57,13 +57,13 @@ public final class RemoteThread {
         // Capture original state
         switch stateBox {
         case .arm64:
-            guard let orig: ThreadStateARM64 = getThreadState(ThreadStateARM64.self, thread: thread) else {
+            guard let orig: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: thread) else {
                 resume(); throw Error.failedGetState
             }
             originalState = .arm64(orig)
 
         case .x86_64:
-            guard let orig: ThreadStateX86_64 = getThreadState(ThreadStateX86_64.self, thread: thread) else {
+            guard let orig: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: thread) else {
                 resume(); throw Error.failedGetState
             }
             originalState = .x86_64(orig)
@@ -117,16 +117,16 @@ public final class RemoteThread {
         let ret: UInt64
         switch stateBox {
         case .arm64:
-            guard let now: ThreadStateARM64 = getThreadState(ThreadStateARM64.self, thread: thread) else {
+            guard let now: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: thread) else {
                 resume(); throw Error.failedGetState
             }
-            ret = now.retInt
+            ret = now.retVal
 
         case .x86_64:
-            guard let now: ThreadStateX86_64 = getThreadState(ThreadStateX86_64.self, thread: thread) else {
+            guard let now: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: thread) else {
                 resume(); throw Error.failedGetState
             }
-            ret = now.retInt
+            ret = now.retVal
         }
 
         // Restore original
