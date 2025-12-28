@@ -9,80 +9,99 @@ import Darwin.Mach
 
 public enum RemoteExecute {
 
+    /// Executes a function in a remote task by hijacking a "worker" thread.
+    /// This is a minimal, sleep-based executor suitable for first validation.
+    ///
+    /// - Returns: Integer/boolean return value (retInt). For float-returning functions
+    ///            like `traceline`, validate via out-params (e.g. TraceResult.fraction)
+    ///            until XMM support is added.
     public static func executeAndReturn(
         task: mach_port_t,
         function address: mach_vm_address_t,
-        arguments: [UInt64] = []
+        arguments: [UInt64] = [],
+        sleepUS: useconds_t = 5_000
     ) -> UInt64? {
 
-        guard let thread = ThreadSelector.selectWorkerThread(task: task)
-        else { return nil }
+        guard let thread = ThreadSelector.selectWorkerThread(task: task) else { return nil }
+        guard var stateBox = makeThreadState(for: task) else { return nil }
 
-        // 1. Capture original state
-        var original = ThreadState()
-        var count = THREAD_STATE_COUNT
-
-        guard Mach.getThreadState(
-            thread,
-            into: &original.raw,
-            count: &count
-        ) == KERN_SUCCESS else { return nil }
-
-        var state = original
-
-        // 2. Setup call
-        state.pc = UInt64(address)
-
-        if arguments.count > 0 { state.arg0 = arguments[0] }
-        if arguments.count > 1 { state.arg1 = arguments[1] }
-        if arguments.count > 2 { state.arg2 = arguments[2] }
-        if arguments.count > 3 { state.arg3 = arguments[3] }
-
-        #if arch(arm64)
-        state.lr = original.pc     // clean return
-        #elseif arch(x86_64)
-        state.sp -= 8
-        var ret = original.pc
-        MachCalls.write(
-            task: task,
-            address: mach_vm_address_t(state.sp),
-            buffer: &ret,
-            count: 8
-        )
-        #endif
-
-        // 3. Inject state
-        guard Mach.setThreadState(
-            thread,
-            from: &state.raw,
-            count: THREAD_STATE_COUNT
-        ) == KERN_SUCCESS else { return nil }
-
-        // 4. Resume and wait briefly
-        thread_resume(thread)
-        usleep(5000)
+        // Suspend the worker while we hijack it
         thread_suspend(thread)
+        defer { thread_resume(thread) }
 
-        // 5. Read final state
-        var final = ThreadState()
-        count = THREAD_STATE_COUNT
+        switch stateBox {
 
-        guard Mach.getThreadState(
-            thread,
-            into: &final.raw,
-            count: &count
-        ) == KERN_SUCCESS else { return nil }
+        case .arm64:
+            // 1) Capture original
+            guard var original: ThreadStateARM64 = getThreadState(ThreadStateARM64.self, thread: thread) else {
+                return nil
+            }
 
-        // 6. Restore original state
-        var restore = original
-        _ = Mach.setThreadState(
-            thread,
-            from: &restore.raw,
-            count: THREAD_STATE_COUNT
-        )
+            // 2) Setup call state
+            var call = original
+            call.pc = UInt64(address)
 
-        thread_resume(thread)
+            if arguments.count > 0 { call.arg0 = arguments[0] }
+            if arguments.count > 1 { call.arg1 = arguments[1] }
+            if arguments.count > 2 { call.arg2 = arguments[2] }
+            if arguments.count > 3 { call.arg3 = arguments[3] }
 
-        return final.retVal
+            // NOTE: On ARM64, we are not setting LR here.
+            // For first validation (traceline), we only need the out-struct to update.
+            // A robust executor should set a trap stub and poll PC/LR.
+
+            // 3) Inject + run
+            guard setThreadState(&call, thread: thread) else { return nil }
+            thread_resume(thread)
+            usleep(sleepUS)
+            thread_suspend(thread)
+
+            // 4) Read final
+            guard let final: ThreadStateARM64 = getThreadState(ThreadStateARM64.self, thread: thread) else {
+                // Restore anyway
+                _ = setThreadState(&original, thread: thread)
+                return nil
+            }
+
+            // 5) Restore original
+            _ = setThreadState(&original, thread: thread)
+
+            return final.retInt
+
+        case .x86_64:
+            // 1) Capture original
+            guard var original: ThreadStateX86_64 = getThreadState(ThreadStateX86_64.self, thread: thread) else {
+                return nil
+            }
+
+            // 2) Setup call state
+            var call = original
+            call.pc = UInt64(address)
+
+            if arguments.count > 0 { call.arg0 = arguments[0] }
+            if arguments.count > 1 { call.arg1 = arguments[1] }
+            if arguments.count > 2 { call.arg2 = arguments[2] }
+            if arguments.count > 3 { call.arg3 = arguments[3] }
+
+            // NOTE: For first validation we are not pushing a return address.
+            // A robust implementation should push a known trap return and wait for it.
+
+            // 3) Inject + run
+            guard setThreadState(&call, thread: thread) else { return nil }
+            thread_resume(thread)
+            usleep(sleepUS)
+            thread_suspend(thread)
+
+            // 4) Read final
+            guard var final: ThreadStateX86_64 = getThreadState(ThreadStateX86_64.self, thread: thread) else {
+                _ = setThreadState(&original, thread: thread)
+                return nil
+            }
+
+            // 5) Restore original
+            _ = setThreadState(&original, thread: thread)
+
+            return final.retInt
+        }
     }
 }
