@@ -124,6 +124,12 @@ public class Region {
     public func deallocate(at address: mach_vm_address_t, size: mach_vm_size_t) {
         MachCalls.deallocate(task: task, address: address, size: size)
     }
+    
+    public func deallocate(at address: mach_vm_address_t, size: Int) {
+        MachCalls.deallocate(task: task,
+                             address: address,
+                             size: mach_vm_size_t(size))
+    }
 
     // MARK: - Code Cave
 
