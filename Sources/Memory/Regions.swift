@@ -10,7 +10,7 @@ enum MemError: Error {
 public struct Regions: Sequence, IteratorProtocol {
 
     public let port: mach_port_t
-    private var nextAddress: mach_vm_address_t = 1
+    private var nextAddress: mach_vm_address_t = 0
     private var filter: ((Region) -> Bool)?
 
     public init(port: mach_port_t, filter: ((Region) -> Bool)? = nil) {
@@ -19,6 +19,8 @@ public struct Regions: Sequence, IteratorProtocol {
         print("Regions initialized")
     }
     
+    // TODO:
+    // Get rid of this so we aren't importing AppKit
     public init(name: String) throws {
         guard let app = NSWorkspace.shared.runningApplications
                 .first(where: { $0.localizedName?.lowercased() == name.lowercased() }) else { throw MemError.noPID }
@@ -85,9 +87,7 @@ public struct Regions: Sequence, IteratorProtocol {
         for region in self {
             print("checking region at \(region.address)")
             guard region.isReadable,
-                  region.isExecutable else {
-                print("isReadable: \(region.isReadable), isExecutable: \(region.isExecutable)")
-                continue }
+                  region.isExecutable else { continue }
 
             // Exact match or containing region
             if region.address == mainBase ||
