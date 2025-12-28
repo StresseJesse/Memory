@@ -16,6 +16,7 @@ public struct Regions: Sequence, IteratorProtocol {
     public init(port: mach_port_t, filter: ((Region) -> Bool)? = nil) {
         self.port = port
         self.filter = filter
+        print("Regions initialized")
     }
     
     public init(name: String) throws {
@@ -82,8 +83,11 @@ public struct Regions: Sequence, IteratorProtocol {
         else { return nil }
 
         for region in self {
+            print("checking region at \(region.address)")
             guard region.isReadable,
-                  region.isExecutable else { continue }
+                  region.isExecutable else {
+                print("isReadable: \(region.isReadable), isExecutable: \(region.isExecutable)")
+                continue }
 
             // Exact match or containing region
             if region.address == mainBase ||
