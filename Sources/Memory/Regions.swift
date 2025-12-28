@@ -79,7 +79,7 @@ public struct Regions: Sequence, IteratorProtocol {
     // MARK: - Main Executable Lookup
 
     /// Returns the region corresponding to the main executable in the task.
-    func mainExecutable() -> Region? {
+    public func mainExecutable() -> Region? {
         for region in self.filterReadableExecutable() {
             if let header = region.header, header.filetype == MH_EXECUTE {
                 return region
