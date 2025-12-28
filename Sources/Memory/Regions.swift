@@ -83,6 +83,7 @@ public struct Regions: Sequence, IteratorProtocol {
         guard let mainBase = ProcessImages.shared
                 .mainExecutableBase(task: port)
         else { return nil }
+        print("mainBase: \(mainBase)")
 
         for region in self {
             guard region.isReadable,
