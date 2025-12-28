@@ -7,8 +7,10 @@
 
 import Foundation
 import Darwin.Mach
+import MachO
 
-public class Region {
+public final class Region {
+
     public let address: mach_vm_address_t
     public let size: mach_vm_size_t
     public let info: vm_region_basic_info_64
@@ -17,23 +19,91 @@ public class Region {
     private var cachedProtection: vm_prot_t?
     private let memory: RemoteMemory
 
-    public init(address: mach_vm_address_t,
-                size: mach_vm_size_t,
-                info: vm_region_basic_info_64,
-                task: mach_port_t,
-                useSnapshot: Bool = false) {
+    // MARK: - Mach-O cache (per Region instance)
+
+    private var machoDidCompute: Bool = false
+    private var machoMagic: UInt32? = nil
+    private var machoHeader: mach_header_64? = nil
+    private var machoIsMachO: Bool = false
+
+    public init(
+        address: mach_vm_address_t,
+        size: mach_vm_size_t,
+        info: vm_region_basic_info_64,
+        task: mach_port_t,
+        useSnapshot: Bool = false
+    ) {
         self.address = address
         self.size = size
         self.info = info
         self.task = task
         self.cachedProtection = info.protection
-        self.memory = useSnapshot ? (RemoteMemory(task: task, address: address, size: size) ?? RemoteMemory(task: task))
-                                  : RemoteMemory(task: task)
+        self.memory = useSnapshot
+            ? (RemoteMemory(task: task, address: address, size: size) ?? RemoteMemory(task: task))
+            : RemoteMemory(task: task)
     }
+
+    // MARK: - Protection flags
 
     public var isReadable: Bool { (info.protection & VM_PROT_READ) != 0 }
     public var isWritable: Bool { (info.protection & VM_PROT_WRITE) != 0 }
     public var isExecutable: Bool { (info.protection & VM_PROT_EXECUTE) != 0 }
+
+    // MARK: - Mach-O helpers (base address implied)
+
+    /// First 4 bytes at region base (cached).
+    public var magic: UInt32? {
+        ensureMachOCache()
+        return machoMagic
+    }
+
+    /// mach_header_64 at region base (cached if Mach-O 64).
+    public var header: mach_header_64? {
+        ensureMachOCache()
+        return machoHeader
+    }
+
+    /// True if region base looks like a 64-bit Mach-O header (cached).
+    public var isMachO: Bool {
+        ensureMachOCache()
+        return machoIsMachO
+    }
+
+    /// CPU type from Mach-O header (cached).
+    public var cpuType: cpu_type_t? {
+        ensureMachOCache()
+        return machoHeader?.cputype
+    }
+
+    /// CPU subtype from Mach-O header (cached).
+    public var cpuSubtype: cpu_subtype_t? {
+        ensureMachOCache()
+        return machoHeader?.cpusubtype
+    }
+
+    /// If you ever need to refresh the header (usually not).
+    public func invalidateMachOCache() {
+        machoDidCompute = false
+        machoMagic = nil
+        machoHeader = nil
+        machoIsMachO = false
+    }
+
+    @inline(__always)
+    private func ensureMachOCache() {
+        if machoDidCompute { return }
+        machoDidCompute = true
+
+        guard isReadable else { return }
+
+        guard let m: UInt32 = read(at: address) else { return }
+        machoMagic = m
+
+        guard m == MH_MAGIC_64 || m == MH_CIGAM_64 else { return }
+        machoIsMachO = true
+
+        machoHeader = (read(at: address) as mach_header_64?)
+    }
 
     // MARK: - Reading
 
@@ -116,27 +186,24 @@ public class Region {
         guard MachCalls.allocate(task: task, size: size, address: &addr) == KERN_SUCCESS else { return nil }
         return addr
     }
-    
+
     public func allocate(size: Int) -> mach_vm_address_t? {
-        return allocate(size: mach_vm_size_t(size))
+        allocate(size: mach_vm_size_t(size))
     }
 
     public func deallocate(at address: mach_vm_address_t, size: mach_vm_size_t) {
         MachCalls.deallocate(task: task, address: address, size: size)
     }
-    
+
     public func deallocate(at address: mach_vm_address_t, size: Int) {
-        MachCalls.deallocate(task: task,
-                             address: address,
-                             size: mach_vm_size_t(size))
+        MachCalls.deallocate(task: task, address: address, size: mach_vm_size_t(size))
     }
 
     // MARK: - Code Cave
 
     public func findCodeCave(length: Int) -> mach_vm_address_t? {
         guard length > 0, size >= length else { return nil }
-        guard let buffer = read(at: address,
-                                numBytes: Int(size)) else { return nil }
+        guard let buffer = read(at: address, numBytes: Int(size)) else { return nil }
 
         var caveStart: mach_vm_address_t? = nil
         var caveLen: Int = 0
