@@ -19,7 +19,7 @@ public enum RemoteExecute {
         task: mach_port_t,
         function address: mach_vm_address_t,
         arguments: [UInt64] = [],
-        sleepUS: useconds_t = 5_000
+        sleepUS: useconds_t = 50_000
     ) -> UInt64? {
 
         guard let thread = ThreadSelector.selectWorkerThread(task: task) else { return nil }
