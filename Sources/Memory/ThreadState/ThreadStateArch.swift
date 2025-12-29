@@ -6,6 +6,7 @@
 //
 
 import Darwin.Mach
+import CMach
 
 public enum ThreadStateArch: CustomStringConvertible {
     case arm64
