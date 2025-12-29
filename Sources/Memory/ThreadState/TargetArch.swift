@@ -16,8 +16,8 @@ public enum TargetArch {
 public func detectTargetArch(task: mach_port_t) -> TargetArch? {
     var regions = Regions(port: task)
 
-    guard let main = regions.mainExecutable(),
-          let header: mach_header_64 = main.read(at: main.address)
+    guard let region = regions.mainExecutable(),
+          let header: mach_header_64 = region.read(at: region.address)
     else { return nil }
 
     switch header.cputype {
