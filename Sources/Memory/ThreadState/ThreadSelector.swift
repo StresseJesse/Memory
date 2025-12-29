@@ -7,6 +7,28 @@
 
 import Darwin.Mach
 
+public enum ThreadDebug {
+
+    /// Prints a report and returns the chosen thread (if any).
+    @discardableResult
+    public static func pickAndReport(task: mach_port_t) -> thread_act_t? {
+        print("[ThreadDebug] task=\(task)")
+
+        if let arch = detectTargetArch(task: task) {
+            print("[ThreadDebug] detected arch:", arch)
+        } else {
+            print("[ThreadDebug] detectTargetArch FAILED")
+        }
+
+        let t = ThreadSelector.selectWorkerThread(task: task)
+        if let t {
+            print("[ThreadDebug] selected worker thread:", t)
+        } else {
+            print("[ThreadDebug] NO WORKER THREAD FOUND")
+        }
+        return t
+    }
+}
 public enum ThreadSelector {
 
     @inline(__always)
