@@ -8,60 +8,115 @@
 import Darwin.Mach
 
 public enum ThreadSelector {
-
-    /// Picks a thread we can successfully read state from (robust).
-    /// Prefers non-current thread, and avoids threads where thread_get_state fails.
-    public static func selectWorkerThread(task: mach_port_t) -> thread_act_t? {
+    
+    static func selectWorkerThread(task: mach_port_t) -> thread_act_t? {
         var threads: thread_act_array_t?
         var count: mach_msg_type_number_t = 0
+        guard task_threads(task, &threads, &count) == KERN_SUCCESS,
+              let threads else { return nil }
+        defer { vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), vm_size_t(count) * vm_size_t(MemoryLayout<thread_act_t>.stride)) }
 
-        let kr = task_threads(task, &threads, &count)
-        guard kr == KERN_SUCCESS, let list = threads, count > 0 else {
-            print("[ThreadSelector] task_threads failed: \(kr)")
-            return nil
-        }
+        let selfThread = mach_thread_self()
+        defer { mach_port_deallocate(mach_task_self_, selfThread) }
 
-        defer {
-            // task_threads allocates memory in our task; free it
-            vm_deallocate(
-                mach_task_self_,
-                vm_address_t(UInt(bitPattern: list)),
-                vm_size_t(count) * vm_size_t(MemoryLayout<thread_act_t>.stride)
-            )
-        }
+        // Prefer: WAITING/RUNNING and state-get succeeds
+        var best: thread_act_t? = nil
 
-        guard let arch = detectTargetArch(task: task) else {
-            print("[ThreadSelector] detectTargetArch failed")
-            return nil
-        }
-
-        // Iterate all threads and pick first we can read state from
         for i in 0..<Int(count) {
-            let t = list[i]
+            let t = threads[i]
+            if t == selfThread { continue }
 
-            // Don’t pick the thread we’re currently on (rare but safe)
-            if t == mach_thread_self() { continue }
+            // (Optional) read thread_basic_info to avoid dead/suspended threads
+            var info = thread_basic_info()
+            var infoCount = mach_msg_type_number_t(MemoryLayout.size(ofValue: info) / MemoryLayout<integer_t>.size)
+            let krInfo = withUnsafeMutablePointer(to: &info) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(infoCount)) {
+                    thread_info(t, thread_flavor_t(THREAD_BASIC_INFO), $0, &infoCount)
+                }
+            }
+            if krInfo == KERN_SUCCESS {
+                // Accept WAITING or RUNNING (this is the key change)
+                if info.run_state != TH_STATE_RUNNING && info.run_state != TH_STATE_WAITING {
+                    continue
+                }
+                if (info.flags & TH_FLAGS_SWAPPED) != 0 { continue }
+                // If you have a “suspended” filter today, loosen it.
+            }
 
-            thread_suspend(t)
-            defer { thread_resume(t) }
+            // Must be able to read/set state for this thread
+            guard let arch = detectTargetArch(task: task) else { return nil }
 
             switch arch {
             case .arm64:
-                if let _: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: t) {
-                    print("[ThreadSelector] selected thread index \(i) (arm64)")
-                    return t
-                }
+                guard let st: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: t) else { continue }
+                if st.pc == 0 || st.sp == 0 { continue }
+                best = t
+
             case .x86_64:
-                if let _: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: t) {
-                    print("[ThreadSelector] selected thread index \(i) (x86_64)")
-                    return t
-                }
+                guard let st: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: t) else { continue }
+                if st.pc == 0 || st.sp == 0 { continue }
+                best = t
             }
+
+            if best != nil { break }
         }
 
-        print("[ThreadSelector] no suitable thread found")
-        return nil
+        return best
     }
+
+//    /// Picks a thread we can successfully read state from (robust).
+//    /// Prefers non-current thread, and avoids threads where thread_get_state fails.
+//    public static func selectWorkerThread(task: mach_port_t) -> thread_act_t? {
+//        var threads: thread_act_array_t?
+//        var count: mach_msg_type_number_t = 0
+//
+//        let kr = task_threads(task, &threads, &count)
+//        guard kr == KERN_SUCCESS, let list = threads, count > 0 else {
+//            print("[ThreadSelector] task_threads failed: \(kr)")
+//            return nil
+//        }
+//
+//        defer {
+//            // task_threads allocates memory in our task; free it
+//            vm_deallocate(
+//                mach_task_self_,
+//                vm_address_t(UInt(bitPattern: list)),
+//                vm_size_t(count) * vm_size_t(MemoryLayout<thread_act_t>.stride)
+//            )
+//        }
+//
+//        guard let arch = detectTargetArch(task: task) else {
+//            print("[ThreadSelector] detectTargetArch failed")
+//            return nil
+//        }
+//
+//        // Iterate all threads and pick first we can read state from
+//        for i in 0..<Int(count) {
+//            let t = list[i]
+//
+//            // Don’t pick the thread we’re currently on (rare but safe)
+//            if t == mach_thread_self() { continue }
+//
+//            thread_suspend(t)
+//            defer { thread_resume(t) }
+//
+//            switch arch {
+//            case .arm64:
+//                if let _: ThreadStateArm = getThreadState(ThreadStateArm.self, thread: t) {
+//                    print("[ThreadSelector] selected thread index \(i) (arm64)")
+//                    return t
+//                }
+//            case .x86_64:
+//                if let _: ThreadStateX86 = getThreadState(ThreadStateX86.self, thread: t) {
+//                    print("[ThreadSelector] selected thread index \(i) (x86_64)")
+//                    return t
+//                }
+//            }
+//        }
+//
+//        print("[ThreadSelector] no suitable thread found")
+//        return nil
+//    }
 }
 
 
