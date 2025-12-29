@@ -14,7 +14,7 @@ public enum ThreadStateBox {
 }
 
 public func makeThreadState(for task: mach_port_t) -> ThreadStateBox? {
-    switch detectTargetArch(task: task) {
+    switch detectThreadStateArch(task: task) {
     case .arm64:
         return .arm64(ThreadStateArm())
     case .x86_64:
