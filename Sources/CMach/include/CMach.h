@@ -3,11 +3,41 @@
 #include <mach/mach.h>
 #include <mach/thread_act.h>
 #include <mach/thread_status.h>
-
 #include <stdint.h>
 
+/*
+ IMPORTANT:
+ ----------
+ On real x86_64 builds, Darwin ALREADY defines:
+   - x86_thread_state64_t
+   - x86_THREAD_STATE64
+
+ Redefining them causes:
+   "typedef redefinition with different types"
+
+ Therefore:
+   • On x86_64 → do NOTHING
+   • On arm64  → provide shim definitions so Swift can see them
+*/
+
+#if defined(__x86_64__)
+
+/*
+ * x86_64 host:
+ * Use system-provided definitions.
+ * DO NOT define anything here.
+ */
+
+#else  /* arm64 host (Apple Silicon) */
+
+/*
+ * Apple Silicon:
+ * Darwin headers intentionally hide x86 thread state.
+ * We provide minimal ABI-compatible shims so Swift can use them.
+ */
+
 #ifndef x86_THREAD_STATE64
-  // Flavor constant used by thread_get_state/thread_set_state for x86_64 GP regs.
+  // thread_state_flavor_t value for x86_64 general registers
   #define x86_THREAD_STATE64 4
 #endif
 
@@ -38,4 +68,6 @@ typedef struct x86_thread_state64 {
     uint64_t __gs;
 } x86_thread_state64_t;
 
-#endif
+#endif /* __X86_THREAD_STATE64_T__ */
+
+#endif /* __x86_64__ */
