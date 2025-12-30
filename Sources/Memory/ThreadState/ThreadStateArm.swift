@@ -5,8 +5,12 @@
 //  Created by Jesse Ramsey on 12/27/25.
 //
 
-
+#if arch(x86_64)
+import CMach
 import Darwin.Mach
+#else
+import Darwin.Mach
+#endif
 
 public struct ThreadStateArm: AnyThreadState {
     public var raw = arm_thread_state64_t()
