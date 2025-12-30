@@ -41,7 +41,7 @@ public struct Regions: Sequence, IteratorProtocol {
 
         while true {
             guard let (regionAddress, regionSize, info) =
-                    MachCalls.regionInfo(task: port, address: nextAddress)
+                    Mach.regionInfo(task: port, address: nextAddress)
             else { return nil }
 
             nextAddress = regionAddress + regionSize

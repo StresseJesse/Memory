@@ -8,7 +8,7 @@
 import CMach
 import Darwin.Mach
 
-
+// probably going to be removed soon
 public struct ThreadStateX86: AnyThreadState {
     public var raw = x86_thread_state64_t()
     public init() {}

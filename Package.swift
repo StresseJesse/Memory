@@ -11,13 +11,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "CMach",
-            path: "Sources/CMach",
-            publicHeadersPath: "include"
-        ),
-        .target(
             name: "Memory",
-            dependencies: ["CMach"]
         ),
         .testTarget(
             name: "MemoryTests",

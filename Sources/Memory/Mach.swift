@@ -15,7 +15,7 @@
 import Darwin.Mach
 
 /// Low-level wrappers around Mach VM APIs.
-public enum MachCalls {
+public enum Mach {
 
     // MARK: - Memory Read
 
@@ -187,5 +187,19 @@ public enum MachCalls {
             return "MachError \(code): \(msg)"
         }
         public init(_ code: kern_return_t) { self.code = code }
+    }
+}
+
+/// Rebindings
+@inline(__always)
+public func withIntegerBuffer<T, R>(
+    of value: inout T,
+    count: mach_msg_type_number_t,
+    _ body: (UnsafeMutablePointer<integer_t>) -> R
+) -> R {
+    return withUnsafeMutablePointer(to: &value) { p in
+        p.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { ip in
+            body(ip)
+        }
     }
 }

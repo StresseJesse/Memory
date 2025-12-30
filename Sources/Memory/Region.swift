@@ -17,7 +17,7 @@ public final class Region {
     public let task: mach_port_t
 
     private var cachedProtection: vm_prot_t?
-    private let memory: RemoteMemory
+    private let memory: Memory
 
     // MARK: - Mach-O cache (per Region instance)
 
@@ -39,8 +39,8 @@ public final class Region {
         self.task = task
         self.cachedProtection = info.protection
         self.memory = useSnapshot
-            ? (RemoteMemory(task: task, address: address, size: size) ?? RemoteMemory(task: task))
-            : RemoteMemory(task: task)
+            ? (Memory(task: task, address: address, size: size) ?? Memory(task: task))
+            : Memory(task: task)
     }
 
     // MARK: - Protection flags
@@ -172,7 +172,7 @@ public final class Region {
 
     @discardableResult
     public func protect(address: mach_vm_address_t, size: mach_vm_size_t, newProtection: vm_prot_t) -> Bool {
-        guard MachCalls.protect(task: task, address: address, size: size, protection: newProtection) == KERN_SUCCESS else {
+        guard Mach.protect(task: task, address: address, size: size, protection: newProtection) == KERN_SUCCESS else {
             return false
         }
         cachedProtection = newProtection
@@ -183,7 +183,7 @@ public final class Region {
 
     public func allocate(size: mach_vm_size_t) -> mach_vm_address_t? {
         var addr: mach_vm_address_t = 0
-        guard MachCalls.allocate(task: task, size: size, address: &addr) == KERN_SUCCESS else { return nil }
+        guard Mach.allocate(task: task, size: size, address: &addr) == KERN_SUCCESS else { return nil }
         return addr
     }
 
@@ -192,11 +192,11 @@ public final class Region {
     }
 
     public func deallocate(at address: mach_vm_address_t, size: mach_vm_size_t) {
-        MachCalls.deallocate(task: task, address: address, size: size)
+        Mach.deallocate(task: task, address: address, size: size)
     }
 
     public func deallocate(at address: mach_vm_address_t, size: Int) {
-        MachCalls.deallocate(task: task, address: address, size: mach_vm_size_t(size))
+        Mach.deallocate(task: task, address: address, size: mach_vm_size_t(size))
     }
 
     // MARK: - Code Cave
